@@ -36,3 +36,9 @@ div[class*="rounded-tremor"] {
 [role="listbox"] {
   background-color: white !important;
 }
+
+/* Tremor Card rounded corners */
+.tremor-Card-root,
+[class*="tremor-Card"] {
+  border-radius: 1rem !important;
+}
