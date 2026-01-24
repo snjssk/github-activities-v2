@@ -117,8 +117,16 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
     );
   }
 
+  const formatDateRange = (startDate: string, endDate: string): string => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const startStr = `${start.getMonth() + 1}/${start.getDate()}`;
+    const endStr = `${end.getMonth() + 1}/${end.getDate()}`;
+    return `${startStr}~${endStr}`;
+  };
+
   const chartData = weekly?.data.map((d) => ({
-    week: d.week,
+    week: formatDateRange(d.start_date, d.end_date),
     Commit: d.commit,
     'PR Opened': d.pr_opened,
     'PR Merged': d.pr_merged,
@@ -145,13 +153,25 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
   const currentWeek = getCurrentWeekLabel();
   const currentMonth = getCurrentMonthLabel();
 
+  // Get this week's date range from the last item in weekly data
+  const thisWeekRange = weekly?.data.length
+    ? formatDateRange(weekly.data[weekly.data.length - 1].start_date, weekly.data[weekly.data.length - 1].end_date)
+    : '';
+
   return (
     <div className="min-h-screen p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <Title>GitHub Activities Dashboard</Title>
-          <Text>Track and visualize development activities</Text>
+          <h1 className="text-3xl font-bold text-gray-900">GitHub Activities Dashboard</h1>
+          <p className="text-lg font-semibold text-gray-600 mt-1">
+            Track and visualize development activities
+          </p>
+          {thisWeekRange && (
+            <p className="text-sm text-gray-500 mt-1">
+              Latest period: {weekly?.data[weekly.data.length - 1]?.start_date} ~ {weekly?.data[weekly.data.length - 1]?.end_date}
+            </p>
+          )}
         </div>
         <Select value={selectedUser} onValueChange={onUserChange} className="w-48">
           {users.map((user) => (
@@ -164,36 +184,36 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
 
       {/* KPI Cards */}
       <Grid numItems={1} numItemsSm={2} numItemsLg={5} className="gap-4 mb-8">
-        <Card decoration="top" decorationColor="blue">
-          <Text>This Week ({currentWeek})</Text>
-          <Metric>{summary?.this_week.total || 0}</Metric>
-          <Badge color={getChangeColor(summary?.week_change.total || 0)}>
-            {formatChange(summary?.week_change.total || 0)} vs last week
-          </Badge>
-        </Card>
-        <Card decoration="top" decorationColor="indigo">
-          <Text>This Month ({currentMonth})</Text>
+        <Card className="border-2 border-indigo-500">
+          <p className="font-bold text-gray-700">Monthly ({currentMonth})</p>
           <Metric>{summary?.this_month.total || 0}</Metric>
           <Badge color={getChangeColor(summary?.month_change.total || 0)}>
             {formatChange(summary?.month_change.total || 0)} vs last month
           </Badge>
         </Card>
-        <Card decoration="top" decorationColor="emerald">
-          <Text>Commits (Week)</Text>
+        <Card className="border-2 border-blue-500">
+          <p className="font-bold text-gray-700">Activity</p>
+          <Metric>{summary?.this_week.total || 0}</Metric>
+          <Badge color={getChangeColor(summary?.week_change.total || 0)}>
+            {formatChange(summary?.week_change.total || 0)} vs last week
+          </Badge>
+        </Card>
+        <Card className="border-2 border-emerald-500">
+          <p className="font-bold text-gray-700">Commits</p>
           <Metric>{summary?.this_week.commit || 0}</Metric>
           <Badge color={getChangeColor(summary?.week_change.commit || 0)}>
             {formatChange(summary?.week_change.commit || 0)} vs last week
           </Badge>
         </Card>
-        <Card decoration="top" decorationColor="blue">
-          <Text>PRs (Week)</Text>
+        <Card className="border-2 border-blue-500">
+          <p className="font-bold text-gray-700">PRs</p>
           <Metric>{summary?.this_week.pr_opened || 0}</Metric>
           <Badge color={getChangeColor(summary?.week_change.pr_opened || 0)}>
             {formatChange(summary?.week_change.pr_opened || 0)} vs last week
           </Badge>
         </Card>
-        <Card decoration="top" decorationColor="amber">
-          <Text>Reviews (Week)</Text>
+        <Card className="border-2 border-amber-500">
+          <p className="font-bold text-gray-700">Reviews</p>
           <Metric>{summary?.this_week.review || 0}</Metric>
           <Badge color={getChangeColor(summary?.week_change.review || 0)}>
             {formatChange(summary?.week_change.review || 0)} vs last week
@@ -202,8 +222,8 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
       </Grid>
 
       {/* Weekly Trend Chart */}
-      <Card className="mb-8">
-        <Title>Weekly Activity Trend</Title>
+      <Card className="mb-8 border-2 border-gray-200">
+        <h2 className="text-xl font-bold text-gray-900">Weekly Activity Trend</h2>
         <AreaChart
           className="mt-4 h-72"
           data={chartData}
@@ -219,8 +239,8 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
       {/* Activity Breakdown and Comparison */}
       <Grid numItems={1} numItemsLg={2} className="gap-8">
         {/* Activity Breakdown */}
-        <Card>
-          <Title>Activity Breakdown (This Week)</Title>
+        <Card className="border-2 border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Activity Breakdown ({thisWeekRange})</h2>
           <BarList
             data={breakdownData}
             className="mt-4"
@@ -228,8 +248,8 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
         </Card>
 
         {/* Member Comparison */}
-        <Card>
-          <Title>Member Comparison</Title>
+        <Card className="border-2 border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">Member Comparison</h2>
           <Text className="mb-4">Select users to compare</Text>
           <div className="flex flex-wrap gap-2 mb-4">
             {users.map((user) => (
