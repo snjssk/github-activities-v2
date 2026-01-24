@@ -179,7 +179,10 @@ def extract_activities_from_events(
                     activity_type = "pr_merged"
 
         elif event_type == "PullRequestReviewEvent":
-            activity_type = "review"
+            # Only count approved reviews (not comments)
+            review = event.get("payload", {}).get("review", {})
+            if review.get("state") == "approved":
+                activity_type = "review"
 
         elif event_type == "IssuesEvent":
             action = event.get("payload", {}).get("action", "")
