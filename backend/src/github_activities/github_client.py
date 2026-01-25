@@ -65,6 +65,56 @@ class GitHubClient:
                 break
         return all_events
 
+    def get_repo_commits(
+        self,
+        repo: str,
+        author: str,
+        since: Optional[date] = None,
+        until: Optional[date] = None,
+    ) -> list[dict]:
+        """Get commits for a repository by author.
+
+        Args:
+            repo: Full repo name (e.g., 'org/repo')
+            author: GitHub username
+            since: Start date
+            until: End date
+        """
+        params = {"author": author, "per_page": 100}
+        if since:
+            params["since"] = f"{since}T00:00:00Z"
+        if until:
+            params["until"] = f"{until}T23:59:59Z"
+
+        all_commits = []
+        page = 1
+        while True:
+            params["page"] = page
+            response = self.client.get(f"/repos/{repo}/commits", params=params)
+            if response.status_code == 404:
+                # Repo not found or no access
+                break
+            response.raise_for_status()
+            commits = response.json()
+            if not commits:
+                break
+            all_commits.extend(commits)
+            if len(commits) < 100:
+                break
+            page += 1
+        return all_commits
+
+    def get_repos_from_push_events(self, username: str) -> set[str]:
+        """Get unique repos where user has PushEvents."""
+        events = self.get_all_user_events(username)
+        repos = set()
+        for event in events:
+            if event.get("type") == "PushEvent":
+                repo = event.get("repo", {}).get("name", "")
+                if repo.startswith(f"{self.org}/"):
+                    repos.add(repo)
+        return repos
+
     def search_prs(
         self,
         username: str,
