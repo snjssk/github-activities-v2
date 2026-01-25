@@ -33,11 +33,18 @@ class Collector:
             return user
 
     def collect_from_events(self, username: str) -> int:
-        """Collect activities from Events API (recent 90 days)."""
+        """Collect activities from Events API (recent 90 days).
+
+        Note: Commits are collected separately via Commits API since
+        Events API doesn't return commit details for private repos.
+        """
         print(f"Collecting events for {username}...")
 
         events = self.github.get_all_user_events(username)
         activities = extract_activities_from_events(events, settings.github_org)
+
+        # Filter out commits - they're collected via Commits API
+        activities = [a for a in activities if a["activity_type"] != "commit"]
 
         if not activities:
             print(f"  No activities found for {username}")
@@ -45,6 +52,70 @@ class Collector:
 
         count = self._save_activities(username, activities)
         print(f"  Saved {count} activities for {username}")
+        return count
+
+    def collect_commits(
+        self,
+        username: str,
+        from_date: Optional[date] = None,
+        to_date: Optional[date] = None,
+    ) -> int:
+        """Collect commits using Commits API.
+
+        Strategy:
+        1. Get repos where user has PushEvents from Events API
+        2. For each repo, fetch commits via Commits API
+        3. Group by date and save
+        """
+        print(f"Collecting commits for {username}...")
+
+        # Get repos from PushEvents
+        repos = self.github.get_repos_from_push_events(username)
+        if not repos:
+            print(f"  No repos with push events found for {username}")
+            return 0
+
+        print(f"  Found {len(repos)} repos with push events")
+
+        activities = []
+        for repo in repos:
+            commits = self.github.get_repo_commits(
+                repo=repo,
+                author=username,
+                since=from_date,
+                until=to_date,
+            )
+
+            if not commits:
+                continue
+
+            # Group commits by date
+            commits_by_date: dict[date, int] = {}
+            for commit in commits:
+                commit_date_str = commit.get("commit", {}).get("author", {}).get("date", "")
+                if commit_date_str:
+                    commit_date = datetime.fromisoformat(
+                        commit_date_str.replace("Z", "+00:00")
+                    ).date()
+                    commits_by_date[commit_date] = commits_by_date.get(commit_date, 0) + 1
+
+            # Create activities
+            for commit_date, count in commits_by_date.items():
+                activities.append({
+                    "activity_type": "commit",
+                    "repository": repo,
+                    "activity_date": commit_date,
+                    "count": count,
+                })
+
+            print(f"    {repo}: {len(commits)} commits")
+
+        if not activities:
+            print(f"  No commits found for {username}")
+            return 0
+
+        count = self._save_activities(username, activities)
+        print(f"  Saved {count} commit records for {username}")
         return count
 
     def collect_from_search(
@@ -164,8 +235,12 @@ class Collector:
         total = 0
 
         # Use Events API for recent data (within 90 days)
+        # Note: This collects PRs, reviews, issues - NOT commits
         if to_date >= ninety_days_ago:
             total += self.collect_from_events(username)
+
+        # Collect commits via Commits API (works for private repos)
+        total += self.collect_commits(username, from_date, to_date)
 
         # Use Search API for older data
         if from_date < ninety_days_ago:
