@@ -65,16 +65,31 @@ TARGET_USERS=user1,user2,user3
 - Tremor コンポーネントを使用
 - 色は `tailwind.config.js` の safelist に追加が必要な場合あり
 
+## データ収集の仕組み
+
+### コミット収集
+Events API の PushEvent は private リポジトリでは commits 配列が空になる問題があるため、以下の戦略で収集:
+
+1. **Events API** から PushEvent を持つリポジトリ一覧を取得
+2. 各リポジトリに対して **Commits API** (`GET /repos/{owner}/{repo}/commits`) で取得
+3. 日付ごとに集計して保存
+
+これにより private リポジトリのコミットも正確に取得可能。
+
+### その他のアクティビティ
+- **PR/Review/Issue**: Events API (90日以内) + Search API (90日以上前)
+- **Review**: `approved` 状態のみカウント（コメントは除外）
+
 ## 既知の問題・制限
 
 ### GitHub API
-- **Events API**: 90日分のみ、commits フィールドが空で返る場合あり
+- **Events API**: 90日分・最大300イベントまで
 - **Search API**: PR/Issue のみ、コミットは取得不可
+- **Commits API**: リポジトリごとに呼び出しが必要
 - **Rate Limit**: Core 5000/時間、Search 30/分
 
 ### データ
-- コミット数が取得できない（Events API の制限）
-- 90日以上前のデータはPR/Issueのみ
+- 90日以上前のデータはPR/Issueのみ（コミットは Events API の範囲内）
 
 ### Tailwind + Tremor
 - 動的クラスは `safelist` に追加が必要
