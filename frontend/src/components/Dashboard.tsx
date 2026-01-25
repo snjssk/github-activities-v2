@@ -228,8 +228,8 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
           className="mt-4 h-72"
           data={chartData}
           index="week"
-          categories={['Total', 'PR Opened', 'Review', 'Issue Opened']}
-          colors={['indigo', 'blue', 'orange', 'teal']}
+          categories={['Total', 'Commit', 'PR Opened', 'Review', 'Issue Opened']}
+          colors={['indigo', 'emerald', 'blue', 'orange', 'teal']}
           yAxisWidth={40}
           showAnimation={true}
           curveType="monotone"
