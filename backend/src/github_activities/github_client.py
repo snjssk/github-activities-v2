@@ -1,6 +1,6 @@
 """GitHub API client."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 import httpx
 
@@ -91,8 +91,9 @@ class GitHubClient:
         while True:
             params["page"] = page
             response = self.client.get(f"/repos/{repo}/commits", params=params)
-            if response.status_code == 404:
-                # Repo not found or no access
+            if response.status_code in (404, 409):
+                # 404: Repo not found or no access
+                # 409: Empty repository (no commits)
                 break
             response.raise_for_status()
             commits = response.json()
@@ -114,6 +115,49 @@ class GitHubClient:
                 if repo.startswith(f"{self.org}/"):
                     repos.add(repo)
         return repos
+
+    def get_org_repos(
+        self,
+        include_archived: bool = False,
+        pushed_within_days: Optional[int] = None,
+    ) -> list[str]:
+        """Get all repositories in the organization.
+
+        Args:
+            include_archived: If False, exclude archived repositories.
+            pushed_within_days: If set, only include repos pushed within N days.
+        """
+        cutoff_date = None
+        if pushed_within_days is not None:
+            cutoff_date = datetime.now().date() - timedelta(days=pushed_within_days)
+
+        all_repos = []
+        page = 1
+        while True:
+            response = self.client.get(
+                f"/orgs/{self.org}/repos",
+                params={"per_page": 100, "page": page, "sort": "pushed"},
+            )
+            response.raise_for_status()
+            repos = response.json()
+            if not repos:
+                break
+            for repo in repos:
+                if not include_archived and repo.get("archived", False):
+                    continue
+                if cutoff_date:
+                    pushed_at = repo.get("pushed_at", "")
+                    if pushed_at:
+                        pushed_date = datetime.fromisoformat(
+                            pushed_at.replace("Z", "+00:00")
+                        ).date()
+                        if pushed_date < cutoff_date:
+                            continue
+                all_repos.append(repo["full_name"])
+            if len(repos) < 100:
+                break
+            page += 1
+        return all_repos
 
     def search_prs(
         self,
