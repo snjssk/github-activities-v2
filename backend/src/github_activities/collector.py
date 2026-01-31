@@ -63,19 +63,19 @@ class Collector:
         """Collect commits using Commits API.
 
         Strategy:
-        1. Get repos where user has PushEvents from Events API
-        2. For each repo, fetch commits via Commits API
+        1. Get all repos in the organization
+        2. For each repo, fetch commits by user via Commits API
         3. Group by date and save
         """
         print(f"Collecting commits for {username}...")
 
-        # Get repos from PushEvents
-        repos = self.github.get_repos_from_push_events(username)
+        # Get recently active repos in the organization (pushed within 20 days)
+        repos = self.github.get_org_repos(pushed_within_days=20)
         if not repos:
-            print(f"  No repos with push events found for {username}")
+            print(f"  No recently active repos found in organization")
             return 0
 
-        print(f"  Found {len(repos)} repos with push events")
+        print(f"  Checking {len(repos)} recently active repos...")
 
         activities = []
         for repo in repos:
@@ -233,19 +233,27 @@ class Collector:
             to_date = today
 
         total = 0
+        events_count = 0
 
         # Use Events API for recent data (within 90 days)
         # Note: This collects PRs, reviews, issues - NOT commits
         if to_date >= ninety_days_ago:
-            total += self.collect_from_events(username)
+            events_count = self.collect_from_events(username)
+            total += events_count
 
         # Collect commits via Commits API (works for private repos)
         total += self.collect_commits(username, from_date, to_date)
 
-        # Use Search API for older data
+        # Use Search API for older data OR if Events API returned nothing
+        # (Events API doesn't work for other users' private repo activities)
         if from_date < ninety_days_ago:
             search_end = min(to_date, ninety_days_ago - timedelta(days=1))
             total += self.collect_from_search(username, from_date, search_end)
+
+        # Fallback: If Events API returned nothing, use Search API for recent data
+        if events_count == 0 and to_date >= ninety_days_ago:
+            search_start = max(from_date, ninety_days_ago)
+            total += self.collect_from_search(username, search_start, to_date)
 
         # Update collect_from_date
         with get_session() as session:
