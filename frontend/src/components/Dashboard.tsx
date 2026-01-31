@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Card,
-  Title,
   Text,
   Select,
   SelectItem,
@@ -70,10 +69,10 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
     if (!selectedUser) return;
 
     setLoading(true);
-    // Get last 4 weeks of data (to avoid gaps in historical data)
+    // Get last 26 weeks (half year) of data
     const today = new Date();
-    const fourWeeksAgo = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000);
-    const fromDate = fourWeeksAgo.toISOString().split('T')[0];
+    const halfYearAgo = new Date(today.getTime() - 26 * 7 * 24 * 60 * 60 * 1000);
+    const fromDate = halfYearAgo.toISOString().split('T')[0];
     const toDate = today.toISOString().split('T')[0];
 
     Promise.all([
