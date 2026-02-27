@@ -15,6 +15,7 @@ import {
   User,
   SummaryResponse,
   WeeklyResponse,
+  MonthlyResponse,
   ComparisonResponse,
 } from '../api/client';
 
@@ -61,6 +62,7 @@ function getCurrentMonthLabel(): string {
 export default function Dashboard({ users, selectedUser, onUserChange }: DashboardProps) {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [weekly, setWeekly] = useState<WeeklyResponse | null>(null);
+  const [monthly, setMonthly] = useState<MonthlyResponse | null>(null);
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null);
   const [compareUsers, setCompareUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,13 +77,23 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
     const fromDate = halfYearAgo.toISOString().split('T')[0];
     const toDate = today.toISOString().split('T')[0];
 
+    const thisYear = today.getFullYear();
+    const lastYear = thisYear - 1;
+    const oneYearAgoMonth = `${lastYear}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+
     Promise.all([
       api.getSummary(selectedUser),
       api.getWeeklyActivities(selectedUser, fromDate, toDate),
+      api.getMonthlyActivities(selectedUser, lastYear),
+      api.getMonthlyActivities(selectedUser, thisYear),
     ])
-      .then(([summaryData, weeklyData]) => {
+      .then(([summaryData, weeklyData, lastYearMonthly, thisYearMonthly]) => {
         setSummary(summaryData);
         setWeekly(weeklyData);
+        // Combine and filter to past 12 months
+        const allMonths = [...lastYearMonthly.data, ...thisYearMonthly.data]
+          .filter((d) => d.month >= oneYearAgoMonth);
+        setMonthly({ ...thisYearMonthly, data: allMonths });
         setLoading(false);
       })
       .catch((err) => {
@@ -92,7 +104,7 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
 
   useEffect(() => {
     if (compareUsers.length > 0) {
-      api.getComparison(compareUsers, 'weekly')
+      api.getComparison(compareUsers, 'monthly')
         .then(setComparison)
         .catch(console.error);
     } else {
@@ -135,13 +147,24 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
     Total: d.total,
   })) || [];
 
+  const monthlyChartData = monthly?.data.map((d) => ({
+    month: d.month,
+    Commit: d.commit,
+    'PR Opened': d.pr_opened,
+    'PR Merged': d.pr_merged,
+    Review: d.review,
+    'Issue Opened': d.issue_opened,
+    'Issue Closed': d.issue_closed,
+    Total: d.total,
+  })) || [];
+
   const breakdownData = summary ? [
-    { name: 'Commits', value: summary.this_week.commit, color: ACTIVITY_COLORS.commit },
-    { name: 'PR Opened', value: summary.this_week.pr_opened, color: ACTIVITY_COLORS.pr_opened },
-    { name: 'PR Merged', value: summary.this_week.pr_merged, color: ACTIVITY_COLORS.pr_merged },
-    { name: 'Reviews', value: summary.this_week.review, color: ACTIVITY_COLORS.review },
-    { name: 'Issue Opened', value: summary.this_week.issue_opened, color: ACTIVITY_COLORS.issue_opened },
-    { name: 'Issue Closed', value: summary.this_week.issue_closed, color: ACTIVITY_COLORS.issue_closed },
+    { name: 'Commits', value: summary.this_month.commit, color: ACTIVITY_COLORS.commit },
+    { name: 'PR Opened', value: summary.this_month.pr_opened, color: ACTIVITY_COLORS.pr_opened },
+    { name: 'PR Merged', value: summary.this_month.pr_merged, color: ACTIVITY_COLORS.pr_merged },
+    { name: 'Reviews', value: summary.this_month.review, color: ACTIVITY_COLORS.review },
+    { name: 'Issue Opened', value: summary.this_month.issue_opened, color: ACTIVITY_COLORS.issue_opened },
+    { name: 'Issue Closed', value: summary.this_month.issue_closed, color: ACTIVITY_COLORS.issue_closed },
   ] : [];
 
   const comparisonData = comparison?.users.map((u) => ({
@@ -235,11 +258,26 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
         />
       </Card>
 
+      {/* Monthly Trend Chart */}
+      <Card className="mb-8 border-2 border-gray-200">
+        <h2 className="text-xl font-bold text-gray-900">Monthly Activity Trend</h2>
+        <AreaChart
+          className="mt-4 h-72"
+          data={monthlyChartData}
+          index="month"
+          categories={['Total', 'Commit', 'PR Opened', 'Review', 'Issue Opened']}
+          colors={['indigo', 'emerald', 'blue', 'orange', 'teal']}
+          yAxisWidth={40}
+          showAnimation={true}
+          curveType="monotone"
+        />
+      </Card>
+
       {/* Activity Breakdown and Comparison */}
       <Grid numItems={1} numItemsLg={2} className="gap-8">
         {/* Activity Breakdown */}
         <Card className="border-2 border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Activity Breakdown ({thisWeekRange})</h2>
+          <h2 className="text-xl font-bold text-gray-900">Activity Breakdown ({currentMonth})</h2>
           <BarList
             data={breakdownData}
             className="mt-4"
@@ -248,7 +286,7 @@ export default function Dashboard({ users, selectedUser, onUserChange }: Dashboa
 
         {/* Member Comparison */}
         <Card className="border-2 border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Member Comparison</h2>
+          <h2 className="text-xl font-bold text-gray-900">Member Comparison ({currentMonth})</h2>
           <Text className="mb-4">Select users to compare</Text>
           <div className="flex flex-wrap gap-2 mb-4">
             {users.map((user) => (
